@@ -570,7 +570,7 @@ func (r *Rows) StructScan(dest interface{}) error {
 		r.fields = m.TraversalsByName(v.Type(), columns)
 		// if we are not unsafe and are missing fields, return an error
 		if f, err := missingFields(r.fields); err != nil && !r.unsafe {
-			return fmt.Errorf("missing destination name %s", columns[f])
+			return fmt.Errorf("missing destination name %s in %T", columns[f], dest)
 		}
 		r.values = make([]interface{}, len(columns))
 		r.started = true
@@ -720,7 +720,7 @@ func (r *Row) scanAny(dest interface{}, structOnly bool) error {
 	fields := m.TraversalsByName(v.Type(), columns)
 	// if we are not unsafe and are missing fields, return an error
 	if f, err := missingFields(fields); err != nil && !r.unsafe {
-		return fmt.Errorf("missing destination name %s", columns[f])
+		return fmt.Errorf("missing destination name %s in %T", columns[f], dest)
 	}
 	values := make([]interface{}, len(columns))
 
@@ -886,7 +886,7 @@ func scanAll(rows rowsi, dest interface{}, structOnly bool) error {
 		fields := m.TraversalsByName(base, columns)
 		// if we are not unsafe and are missing fields, return an error
 		if f, err := missingFields(fields); err != nil && !isUnsafe(rows) {
-			return fmt.Errorf("missing destination name %s", columns[f])
+			return fmt.Errorf("missing destination name %s in %T", columns[f], dest)
 		}
 		values = make([]interface{}, len(columns))
 
