@@ -604,6 +604,76 @@ func TestNamedQuery(t *testing.T) {
 
 		db.Mapper = &old
 
+		// Test nested structs
+		type Place struct {
+			ID   int            `db:"id"`
+			Name sql.NullString `db:"name"`
+		}
+		type PlacePerson struct {
+			FirstName sql.NullString `db:"first_name"`
+			LastName  sql.NullString `db:"last_name"`
+			Email     sql.NullString
+			Place     Place `db:"place"`
+		}
+
+		pl := Place{
+			Name: sql.NullString{String: "myplace", Valid: true},
+		}
+
+		pp := PlacePerson{
+			FirstName: sql.NullString{String: "ben", Valid: true},
+			LastName:  sql.NullString{String: "doe", Valid: true},
+			Email:     sql.NullString{String: "ben@doe.com", Valid: true},
+		}
+
+		q2 := `INSERT INTO place (id, name) VALUES (1, :name)`
+		_, err = db.NamedExec(q2, pl)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		id := 1
+		pp.Place.ID = id
+
+		q3 := `INSERT INTO placeperson (first_name, last_name, email, place_id) VALUES (:first_name, :last_name, :email, :place.id)`
+		_, err = db.NamedExec(q3, pp)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		pp2 := &PlacePerson{}
+		rows, err = db.NamedQuery(`
+			SELECT
+				first_name,
+				last_name,
+				email,
+				place.id AS "place.id",
+				place.name AS "place.name"
+			FROM placeperson
+			INNER JOIN place ON place.id = placeperson.place_id
+			WHERE
+				place.id=:place.id`, pp)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for rows.Next() {
+			err = rows.StructScan(pp2)
+			if err != nil {
+				t.Error(err)
+			}
+			if pp2.FirstName.String != "ben" {
+				t.Error("Expected first name of `ben`, got " + pp2.FirstName.String)
+			}
+			if pp2.LastName.String != "doe" {
+				t.Error("Expected first name of `doe`, got " + pp2.LastName.String)
+			}
+			if pp2.Place.Name.String != "myplace" {
+				t.Error("Expected place name of `myplace`, got " + pp2.Place.Name.String)
+			}
+			if pp2.Place.ID != pp.Place.ID {
+				t.Errorf("Expected place name of %v, got %v", pp.Place.ID, pp2.Place.ID)
+			}
+		}
 	})
 }
 
@@ -755,6 +825,9 @@ func TestUsage(t *testing.T) {
 			t.Error("Expected an error")
 		}
 		err = stmt1.Get(&jason, "DoesNotExist User 2")
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		stmt2, err := db.Preparex(db.Rebind("SELECT * FROM person WHERE first_name=?"))
 		if err != nil {
@@ -775,6 +848,10 @@ func TestUsage(t *testing.T) {
 
 		places := []*Place{}
 		err = db.Select(&places, "SELECT telcode FROM place ORDER BY telcode ASC")
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		usa, singsing, honkers := places[0], places[1], places[2]
 
 		if usa.TelCode != 1 || honkers.TelCode != 852 || singsing.TelCode != 65 {
@@ -792,6 +869,10 @@ func TestUsage(t *testing.T) {
 		// this test also verifies that you can use either a []Struct{} or a []*Struct{}
 		places2 := []Place{}
 		err = db.Select(&places2, "SELECT * FROM place ORDER BY telcode ASC")
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		usa, singsing, honkers = &places2[0], &places2[1], &places2[2]
 
 		// this should return a type error that &p is not a pointer to a struct slice
