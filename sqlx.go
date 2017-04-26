@@ -5,7 +5,9 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"time"
 
+	"context"
 	"io/ioutil"
 	"path/filepath"
 	"reflect"
@@ -237,9 +239,10 @@ func (r *Row) Err() error {
 // used mostly to automatically bind named queries using the right bindvars.
 type DB struct {
 	*sql.DB
-	driverName string
-	unsafe     bool
-	Mapper     *reflectx.Mapper
+	driverName   string
+	unsafe       bool
+	Mapper       *reflectx.Mapper
+	BeginTimeout time.Duration
 }
 
 // NewDb returns a new sqlx DB wrapper for a pre-existing *sql.DB.  The
@@ -332,7 +335,16 @@ func (db *DB) MustBegin() *Tx {
 
 // Beginx begins a transaction and returns an *sqlx.Tx instead of an *sql.Tx.
 func (db *DB) Beginx() (*Tx, error) {
-	tx, err := db.DB.Begin()
+	var (
+		tx  *sql.Tx
+		err error
+	)
+	if db.BeginTimeout != 0 {
+		ctx, _ := context.WithTimeout(context.Background(), db.BeginTimeout)
+		tx, err = db.DB.BeginTx(ctx, nil)
+	} else {
+		tx, err = db.DB.Begin()
+	}
 	if err != nil {
 		return nil, err
 	}
