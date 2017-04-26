@@ -239,10 +239,11 @@ func (r *Row) Err() error {
 // used mostly to automatically bind named queries using the right bindvars.
 type DB struct {
 	*sql.DB
-	driverName   string
-	unsafe       bool
-	Mapper       *reflectx.Mapper
-	BeginTimeout time.Duration
+	driverName        string
+	unsafe            bool
+	Mapper            *reflectx.Mapper
+	BeginTimeout      time.Duration
+	TrackTransactions bool
 }
 
 // NewDb returns a new sqlx DB wrapper for a pre-existing *sql.DB.  The
@@ -348,7 +349,24 @@ func (db *DB) Beginx() (*Tx, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if db.TrackTransactions {
+		trackStartTx(tx)
+	}
+
 	return &Tx{Tx: tx, driverName: db.driverName, unsafe: db.unsafe, Mapper: db.Mapper}, err
+}
+
+func (tx *Tx) Commit() error {
+	err := tx.Tx.Commit()
+	trackReleaseTx(tx.Tx)
+	return err
+}
+
+func (tx *Tx) Rollback() error {
+	err := tx.Tx.Rollback()
+	trackReleaseTx(tx.Tx)
+	return err
 }
 
 // Queryx queries the database and returns an *sqlx.Rows.
